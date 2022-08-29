@@ -12,6 +12,7 @@ Additionally: `conda install -c conda-forge libsndfile` for m1 mac
 
 
 ## Save audio tagging model to torchscript
+
 ```
 CHECKPOINT_PATH="Cnn14_mAP=0.431.pth"
 wget -O $CHECKPOINT_PATH https://zenodo.org/record/3987831/files/Cnn14_mAP%3D0.431.pth?download=1
@@ -23,6 +24,10 @@ python3 pytorch/inference.py audio_tagger_torchscript \                         
 
 ```
 
+- It will save `traced_cnn14.torchscript` that takes (1, 32000 * 7) mono, 7-second, 32kHz-sampled waveform.
+- The output is a tuple, `(predictions, embedding)`.
+  - `predictions` corresponds to 527 labels in `metadata/class_labels_indices.csv`. a sigmoid applied (=multi-labeled)
+  - `embedding` is a 2048-dim activation of the second-last layer. a relu applied. 
 
 ## Audio tagging using pretrained models
 Users can inference the tags of an audio recording using pretrained models without training. Details can be viewed at [scripts/0_inference.sh](scripts/0_inference.sh) First, downloaded one pretrained model from https://zenodo.org/record/3987831, for example, the model named "Cnn14_mAP=0.431.pth". Then, execute the following commands to inference this [audio](resources/R9_ZSCveAHg_7s.wav):
