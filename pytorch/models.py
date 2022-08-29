@@ -222,10 +222,10 @@ class Cnn14(nn.Module):
         embedding = F.dropout(x, p=0.5, training=self.training)
         clipwise_output = torch.sigmoid(self.fc_audioset(x))
         
-        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+        # output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
-        return output_dict
-
+        # return output_dict
+        return clipwise_output, embedding
 
 class Cnn14_no_specaug(nn.Module):
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 

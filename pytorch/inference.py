@@ -13,6 +13,50 @@ from pytorch_utils import move_data_to_device
 import config
 
 
+def save_audio_tagger_torchscript(args):
+    """Inference audio tagging result of an audio clip.
+    """
+
+    # Arugments & parameters
+    sample_rate = args.sample_rate
+    window_size = args.window_size
+    hop_size = args.hop_size
+    mel_bins = args.mel_bins
+    fmin = args.fmin
+    fmax = args.fmax
+    model_type = args.model_type
+    checkpoint_path = args.checkpoint_path
+    device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
+
+    classes_num = config.classes_num
+    labels = config.labels
+
+    # Model
+    Model = eval(model_type)
+    model = Model(sample_rate=sample_rate, window_size=window_size,
+                  hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax,
+                  classes_num=classes_num)
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint['model'])
+
+    # Parallel
+    if 'cuda' in str(device):
+        model.to(device)
+        print('GPU number: {}'.format(torch.cuda.device_count()))
+        model = torch.nn.DataParallel(model)
+    else:
+        print('Using CPU.')
+
+    # to use torchscript
+    example = torch.rand(1, 7 * 32000)
+    model.eval()
+    traced_script_module = torch.jit.trace(model, example)
+    traced_script_module.save("traced_cnn14.torchscript")
+    with open('audioset-527-labels.txt', 'w') as f_w:
+        for label in labels:
+            f_w.write(label + "\n")
+
 def audio_tagging(args):
     """Inference audio tagging result of an audio clip.
     """
@@ -48,7 +92,7 @@ def audio_tagging(args):
         model = torch.nn.DataParallel(model)
     else:
         print('Using CPU.')
-    
+
     # Load audio
     (waveform, _) = librosa.core.load(audio_path, sr=sample_rate, mono=True)
 
@@ -60,7 +104,7 @@ def audio_tagging(args):
         model.eval()
         batch_output_dict = model(waveform, None)
 
-    clipwise_output = batch_output_dict['clipwise_output'].data.cpu().numpy()[0]
+    clipwise_output = batch_output_dict[0].data.cpu().numpy()[0]
     """(classes_num,)"""
 
     sorted_indexes = np.argsort(clipwise_output)[::-1]
@@ -72,7 +116,7 @@ def audio_tagging(args):
 
     # Print embedding
     if 'embedding' in batch_output_dict.keys():
-        embedding = batch_output_dict['embedding'].data.cpu().numpy()[0]
+        embedding = batch_output_dict[1].data.cpu().numpy()[0]
         print('embedding: {}'.format(embedding.shape))
 
     return clipwise_output, labels
@@ -183,6 +227,17 @@ if __name__ == '__main__':
     parser_at.add_argument('--audio_path', type=str, required=True)
     parser_at.add_argument('--cuda', action='store_true', default=False)
 
+    parser_att = subparsers.add_parser('audio_tagger_torchscript')
+    parser_att.add_argument('--sample_rate', type=int, default=32000)
+    parser_att.add_argument('--window_size', type=int, default=1024)
+    parser_att.add_argument('--hop_size', type=int, default=320)
+    parser_att.add_argument('--mel_bins', type=int, default=64)
+    parser_att.add_argument('--fmin', type=int, default=50)
+    parser_att.add_argument('--fmax', type=int, default=14000)
+    parser_att.add_argument('--model_type', type=str, required=True)
+    parser_att.add_argument('--checkpoint_path', type=str, required=True)
+    parser_att.add_argument('--cuda', action='store_true', default=False)
+
     parser_sed = subparsers.add_parser('sound_event_detection')
     parser_sed.add_argument('--sample_rate', type=int, default=32000)
     parser_sed.add_argument('--window_size', type=int, default=1024)
@@ -194,7 +249,7 @@ if __name__ == '__main__':
     parser_sed.add_argument('--checkpoint_path', type=str, required=True)
     parser_sed.add_argument('--audio_path', type=str, required=True)
     parser_sed.add_argument('--cuda', action='store_true', default=False)
-    
+
     args = parser.parse_args()
 
     if args.mode == 'audio_tagging':
@@ -202,6 +257,7 @@ if __name__ == '__main__':
 
     elif args.mode == 'sound_event_detection':
         sound_event_detection(args)
-
+    elif args.mode == 'audio_tagger_torchscript':
+        save_audio_tagger_torchscript(args)
     else:
         raise Exception('Error argument!')
